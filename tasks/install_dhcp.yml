@@ -1,0 +1,42 @@
+---
+- name: Install DHCP features
+  ansible.windows.win_feature:
+    name: '{{ item }}'
+    state: present
+    include_management_tools: true
+    include_sub_features: true
+  loop:
+    - DHCP
+    - RSAT-ADDS
+  register: dhcp
+
+- name: Add Security groups
+  ansible.windows.win_shell: netsh dhcp add securitygroups
+
+- name: Enable DHCP service
+  ansible.windows.win_service:
+    name: dhcpserver
+    start_mode: auto
+
+- name: Authorize DHCP server in AD
+  ansible.windows.win_shell: Add-DhcpServerInDC -DnsName {{ ansible_facts['fqdn'] }} -Confirm:$False
+  delegate_to: '{{ domain_pdc }}'
+
+- name: Supress Server Manager notification
+  ansible.windows.win_regedit:
+    path: HKLM:\SOFTWARE\Microsoft\ServerManager\Roles\12
+    name: ConfigurationState
+    value: 2
+    type: dword
+  delegate_to: '{{ domain_pdc }}'
+
+- name: Make sure DHCP service is running
+  ansible.windows.win_service:
+    name: dhcpserver
+    state: started
+
+- name: Configure DHCP scope
+  ansible.windows.win_shell: |
+    Add-DhcpServerv4Scope -Name {{ dhcp_scope_name }} -StartRange {{ dhcp_scope_start }} -EndRange {{ dhcp_scope_end }} -SubnetMask {{ dhcp_scope_subnet_mask }} -State InActive
+    Set-DhcpServerv4OptionValue -ScopeID {{ dhcp_scope_id }} -DnsDomain {{ domain_name }} -DnsServer {{ dhcp_scope_dns_server }} -Router {{ dhcp_scope_gateway }}
+    Set-DhcpServerv4Scope -ScopeID {{ dhcp_scope_id }} -State Active

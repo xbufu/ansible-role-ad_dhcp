@@ -1,0 +1,6 @@
+---
+- name: Set DA credentials
+  ansible.builtin.include_tasks: set_da_credentials.yml
+
+- name: Install and configure the DHCP feature
+  ansible.builtin.include_tasks: install_dhcp.yml
